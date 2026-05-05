@@ -72,7 +72,7 @@ dependencies {
     implementation(libs.hilt.android)
     kapt(libs.hilt.android.compiler)
     kapt(libs.hilt.android.compiler)
-    implementation(libs.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.navigation.compose)
 
     // Room
     implementation(libs.androidx.room.runtime)
@@ -89,15 +89,13 @@ dependencies {
 
     // WorkManager for Notifications
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.work.hilt)
-    kapt(libs.androidx.work.hilt.compiler)
+    
 
     // Accompanist Permissions (for POST_NOTIFICATIONS runtime request)
-    implementation(libs.accompanist.permissions)
-
+    
     // Testing
     testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
