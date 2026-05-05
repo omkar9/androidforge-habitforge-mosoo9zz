@@ -70,7 +70,7 @@ dependencies {
 
     // Hilt
     implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
+    kapt(libs.hilt.android.compiler)
     kapt(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
 
@@ -83,7 +83,6 @@ dependencies {
     implementation(libs.material)
 
     // Logging
-    implementation(libs.timber)
 
     // AdMob
     implementation(libs.play.services.ads)
