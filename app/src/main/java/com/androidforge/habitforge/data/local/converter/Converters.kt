@@ -1,15 +1,17 @@
-package com.androidforge.habitforge.data.local.converter
+package com.androidforge.habitflow.data.local.converter
 
 import androidx.room.TypeConverter
 import java.time.LocalDate
 
 class Converters {
+
     @TypeConverter
-    fun fromTimestamp(value: Long?): LocalDate? {
-        return value?.let { LocalDate.ofEpochDay(it) }
+    fun fromLocalDate(date: LocalDate?): String? {
+        return date?.toString()
     }
 
-    @TypeConverter\    fun dateToTimestamp(date: LocalDate?): Long? {
-        return date?.toEpochDay()
+    @TypeConverter
+    fun toLocalDate(dateString: String?): LocalDate? {
+        return dateString?.let { LocalDate.parse(it) }
     }
 }
