@@ -4,9 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Required for Android 13 (API 33) and above for notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".HabitForgeApp"
@@ -20,11 +19,6 @@
         android:theme="@style/Theme.App"
         tools:targetApi="31">
 
-        <!-- AdMob Application ID (from Rule 8) -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -35,44 +29,9 @@
             </intent-filter>
         </activity>
 
-        <!-- WorkManager Hilt integration requires removing default initializer -->
-        <provider
-            android:name="androidx.startup.InitializationProvider"
-            android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"
-            tools:node="merge">
-            <meta-data android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup"
-                tools:node="remove" />
-        </provider>
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
 
-        <!-- WorkManager service components (required for older Android versions, included for robustness) -->
-        <service android:name="androidx.work.impl.background.systemjob.SystemJobService"
-            android:permission="android.permission.BIND_JOB_SERVICE"
-            android:enabled="true"
-            android:exported="false"
-            tools:targetApi="23" />
-
-        <receiver android:name="androidx.work.impl.background.systemalarm.RescheduleReceiver"
-            android:enabled="false"
-            android:exported="false" >
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
-        <receiver android:name="androidx.work.impl.background.systemalarm.ConstraintProxyUpdateReceiver"
-            android:enabled="@bool/enable_system_alarm_service_default"
-            android:exported="false"
-            tools:ignore="UnusedAttribute" >
-            <intent-filter>
-                <action android:name="androidx.work.impl.background.systemalarm.UpdateProxies" />
-            </intent-filter>
-        </receiver>
-        <receiver android:name="androidx.work.impl.utils.ForceStopRunnable$BroadcastReceiver"
-            android:enabled="true"
-            android:exported="false"
-            tools:targetApi="23" />
     </application>
 </manifest>
