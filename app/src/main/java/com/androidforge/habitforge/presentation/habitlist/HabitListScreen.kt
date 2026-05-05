@@ -1,5 +1,6 @@
-package com.androidforge.habitforge.presentation.habitlist
+package com.androidforge.habitflow.presentation.habits
 
+import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -7,12 +8,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +26,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -31,266 +41,223 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.androidforge.habitforge.R
-import com.androidforge.habitforge.core.util.Constants
-import com.androidforge.habitforge.domain.model.Habit
-import com.androidforge.habitforge.presentation.components.AdBannerComposable
-import com.androidforge.habitforge.presentation.components.AppToolbar
-import com.androidforge.habitforge.presentation.components.ErrorDialog
-import com.androidforge.habitforge.presentation.components.HabitCard
-import com.androidforge.habitforge.presentation.components.LoadingIndicator
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.androidforge.habitflow.R
+import com.androidforge.habitflow.core.util.DateUtils.toFormattedDate
+import com.androidforge.habitflow.presentation.components.BannerAdView
+import com.androidforge.habitflow.presentation.components.CustomTopAppBar
+import com.androidforge.habitflow.presentation.components.EmptyState
+import com.androidforge.habitflow.presentation.components.ErrorState
+import com.androidforge.habitflow.presentation.components.HabitItem
+import com.androidforge.habitflow.presentation.components.OfflineState
+import com.androidforge.habitflow.presentation.components.ShimmerLoadingScreen
+import com.androidforge.habitflow.presentation.util.AdmobManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HabitListScreen(
-    viewModel: HabitListViewModel = hiltViewModel(),
-    onNavigateToAddEditHabit: (Long) -> Unit,
-    onNavigateToHabitDetail: (Long) -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToAddEditHabit: (String?) -> Unit,
+    onNavigateToDetail: (String) -> Unit,
+    onNavigateToSettings: () -> Unit,
+    admobManager: AdmobManager,
+    viewModel: HabitListViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val pullToRefreshState = rememberPullToRefreshState()
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val activity = LocalContext.current as Activity
 
+    // Observe Lifecycle for AdmobManager
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            admobManager.loadInterstitialAd(context)
+        }
+    }
+
+    // Handle interstitial ad display
     LaunchedEffect(uiState) {
-        if (uiState is HabitListUiState.Error) {
-            val errorMessage = (uiState as HabitListUiState.Error).message
-            snackbarHostState.showSnackbar(errorMessage)
+        if (uiState is HabitListUiState.Success) {
+            val successState = uiState as HabitListUiState.Success
+            if (successState.showInterstitialAd) {
+                admobManager.showInterstitialAd(activity) {
+                    viewModel.onInterstitialAdShown()
+                }
+            }
         }
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            AppToolbar(
-                title = stringResource(R.string.habit_list_title),
-                showBackIcon = false,
-                onSettingsClick = onNavigateToSettings
+            CustomTopAppBar(
+                title = stringResource(R.string.app_name),
+                actions = {
+                    IconButton(
+                        onClick = onNavigateToSettings,
+                        contentDescription = stringResource(R.string.settings_icon_description)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = stringResource(R.string.settings_icon_description),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             )
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { onNavigateToAddEditHabit(Constants.INVALID_HABIT_ID) },
+                onClick = { onNavigateToAddEditHabit(null) },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.cd_add_new_habit)
-                )
-            }
-        }
-    ) {\ paddingValues ->
-        Box(
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .padding(16.dp)
+                    .size(56.dp),
+                content = {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.add_habit_icon_description)
+                    )
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
-            when (uiState) {
-                is HabitListUiState.Loading -> {
-                    LoadingIndicator(
-                        modifier = Modifier.fillMaxSize(),
-                        message = stringResource(R.string.loading_habits)
-                    )
+            when (val state = uiState) {
+                HabitListUiState.Loading -> {
+                    ShimmerLoadingScreen()
                 }
                 is HabitListUiState.Success -> {
-                    val habits = (uiState as HabitListUiState.Success).habits
-                    HabitListContent(
-                        habits = habits,
-                        onHabitClick = onNavigateToHabitDetail,
-                        onMarkComplete = viewModel::markHabitCompleted,
-                        onMarkSkipped = viewModel::markHabitSkipped,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                is HabitListUiState.Empty -> {
-                    EmptyState(
-                        message = stringResource(R.string.empty_habits_message),
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    if (state.habits.isEmpty()) {
+                        EmptyState(
+                            title = stringResource(R.string.empty_habits_title),
+                            message = stringResource(R.string.empty_habits_description),
+                            buttonText = stringResource(R.string.add_your_first_habit),
+                            onButtonClick = { onNavigateToAddEditHabit(null) }
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(items = state.habits, key = { it.habit.id }) { habitWithStatus ->
+                                val dismissState = rememberSwipeToDismissBoxState(
+                                    confirmValueChange = { dismissValue ->
+                                        if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
+                                            scope.launch {
+                                                viewModel.deleteHabit(habitWithStatus.habit)
+                                                snackbarHostState.showSnackbar(
+                                                    message = context.getString(R.string.habit_deleted)
+                                                )
+                                            }
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    },
+                                    positionalThreshold = { it * 0.5f }
+                                )
+
+                                // Reset dismiss state if habit ID changes (e.g., after undo)
+                                LaunchedEffect(habitWithStatus.habit.id) {
+                                    dismissState.reset()
+                                }
+
+                                SwipeToDismissBox(
+                                    state = dismissState,
+                                    modifier = Modifier.animateItemPlacement(tween(durationMillis = 200)),
+                                    directions = setOf(SwipeToDismissBoxValue.EndToStart),
+                                    background = {
+                                        val color = when (dismissState.targetValue) {
+                                            SwipeToDismissBoxValue.Settled -> MaterialTheme.colorScheme.surfaceVariant
+                                            DismissValue.DismissedToEnd -> Color.Transparent // Not used
+                                            SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                                        }
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(color, MaterialTheme.shapes.medium)
+                                                .padding(horizontal = 20.dp, vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = stringResource(R.string.delete_habit_description),
+                                                tint = MaterialTheme.colorScheme.onError
+                                            )
+                                        }
+                                    },
+                                    dismissContent = {
+                                        HabitItem(
+                                            habitWithStatus = habitWithStatus,
+                                            onToggleCompletion = { habitId, isCompleted ->
+                                                viewModel.markHabitCompleted(habitId, isCompleted)
+                                            },
+                                            onClick = { habitId ->
+                                                onNavigateToDetail(habitId)
+                                            },
+                                            onLongClick = { habitId ->
+                                                onNavigateToAddEditHabit(habitId)
+                                            }
+                                        )
+                                    }
+                                )
+                            }
+                            item {
+                                Spacer(modifier = Modifier.height(60.dp)) // Space for FAB
+                            }
+                        }
+                    }
                 }
                 is HabitListUiState.Error -> {
                     ErrorState(
-                        message = (uiState as HabitListUiState.Error).message,
-                        onRetry = viewModel::loadHabits,
-                        modifier = Modifier.fillMaxSize()
+                        title = stringResource(R.string.error_loading_habits_title),
+                        message = state.message,
+                        onRetryClick = viewModel::loadHabits
                     )
                 }
-                is HabitListUiState.Offline -> {
-                    OfflineState(
-                        message = stringResource(R.string.offline_message),
-                        onRetry = viewModel::loadHabits,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                HabitListUiState.Offline -> {
+                    OfflineState(onRetryClick = viewModel::loadHabits)
                 }
             }
-
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-
-            LaunchedEffect(pullToRefreshState.isRefreshing) {
-                if (pullToRefreshState.isRefreshing) {
-                    viewModel.loadHabits() // Trigger data reload on pull-to-refresh
-                }
-            }
-
-            LaunchedEffect(uiState) {
-                if (uiState !is HabitListUiState.Loading && pullToRefreshState.isRefreshing) {
-                    pullToRefreshState.endRefresh()
-                }
-            }
-
-            // Ad banner at the bottom
-            Box(modifier = Modifier.align(Alignment.BottomCenter)) {
-                AdBannerComposable(modifier = Modifier.fillMaxWidth())
-            }
+            // AdMob Banner Ad at the bottom
+            BannerAdView(modifier = Modifier.fillMaxWidth())
         }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun HabitListContent(
-    habits: List<Habit>,
-    onHabitClick: (Long) -> Unit,
-    onMarkComplete: (Habit) -> Unit,
-    onMarkSkipped: (Habit) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(habits, key = { it.id }) {\ habit ->
-            AnimatedVisibility(
-                visible = true,
-                enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(animationSpec = tween(300)),
-                exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(animationSpec = tween(300)),
-                modifier = Modifier.animateItemPlacement(tween(durationMillis = 500))
-            ) {
-                HabitCard(
-                    habit = habit,
-                    onHabitClick = { onHabitClick(habit.id) },
-                    onMarkComplete = { onMarkComplete(habit) },
-                    onMarkSkipped = { onMarkSkipped(habit) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-        item {
-            Spacer(modifier = Modifier.height(60.dp)) // Space for the Ad banner
-        }
-    }
-}
-
-@Composable
-private fun EmptyState(message: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_empty_state),
-            contentDescription = stringResource(R.string.cd_empty_state_illustration),
-            modifier = Modifier.size(120.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(80.dp)) // Space for FAB and ad
-    }
-}
-
-@Composable
-private fun ErrorState(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_error_state),
-            contentDescription = stringResource(R.string.cd_error_state_illustration),
-            modifier = Modifier.size(120.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = stringResource(R.string.error_title),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.error,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        AppToolbar.AppButton(onClick = onRetry) {
-            Text(stringResource(R.string.button_retry))
-        }
-        Spacer(modifier = Modifier.height(80.dp)) // Space for FAB and ad
-    }
-}
-
-@Composable
-private fun OfflineState(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_offline_state),
-            contentDescription = stringResource(R.string.cd_offline_state_illustration),
-            modifier = Modifier.size(120.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = stringResource(R.string.offline_title),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        AppToolbar.AppButton(onClick = onRetry) {
-            Text(stringResource(R.string.button_retry))
-        }
-        Spacer(modifier = Modifier.height(80.dp)) // Space for FAB and ad
     }
 }
